@@ -3,6 +3,25 @@ package vast
 
 import "encoding/xml"
 
+const (
+	TRACK_IMPRESSION = "impression"
+	TRACK_CLICK = "click"
+	TRACK_START = "start"
+	TRACK_FIRST_QUARTILE = "firstQuartile"
+	TRACK_MIDPOINT = "midpoint"
+	TRACK_THIRD_QUARTILE = "thirdQuartile"
+	TRACK_COMPLETE = "complete"
+	TRACK_MUTE = "mute"
+	TRACK_UN_MUTE = "unmute"
+	TRACK_PAUSE = "pause"
+	TRACK_REWIND = "rewind"
+	TRACK_RESUME = "resume"
+	TRACK_FULL_SCREEN = "fullscreen"
+	TRACK_EXPAND = "expand"
+	TRACK_COLLAPSE = "collapse"
+	TRACK_CLOSE = "close"
+)
+
 // VAST is the root <VAST> tag
 type VAST struct {
 	// The version of the VAST spec (should be either "2.0" or "3.0")
