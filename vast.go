@@ -22,6 +22,14 @@ const (
 	TRACK_CLOSE = "close"
 )
 
+var (
+	MimeType = map[string]string{
+		"mp4":  "video/mp4",
+		"webm": "video/webm",
+		"mpg":  "video/mpeg",
+	}
+)
+
 // VAST is the root <VAST> tag
 type VAST struct {
 	// The version of the VAST spec (should be either "2.0" or "3.0")

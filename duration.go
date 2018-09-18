@@ -24,6 +24,19 @@ func (dur Duration) MarshalText() ([]byte, error) {
 	return []byte(fmt.Sprintf("%02d:%02d:%02d.%03d", h, m, s, ms)), nil
 }
 
+// MarshalText implements the encoding.TextMarshaler interface.
+func (dur Duration) MarshalTextMinute() ([]byte, error) {
+
+	m := dur % Duration(time.Hour) / Duration(time.Minute)
+	s := dur % Duration(time.Minute) / Duration(time.Second)
+	ms := dur % Duration(time.Second) / Duration(time.Millisecond)
+
+	if ms == 0 {
+		return []byte(fmt.Sprintf("%02d:%02d", m, s)), nil
+	}
+	return []byte(fmt.Sprintf("%02d:%02d.%03d", m, s, ms)), nil
+}
+
 // UnmarshalText implements the encoding.TextUnmarshaler interface.
 func (dur *Duration) UnmarshalText(data []byte) (err error) {
 	s := string(data)
