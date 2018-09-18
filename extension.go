@@ -65,10 +65,10 @@ func (e *Extension) UnmarshalXML(dec *xml.Decoder, start xml.StartElement) error
 	}
 
 	// if extension have attribute
-	if len(start.Attr) {
+	if len(start.Attr) > 0 {
 		for name, value := range e.Attributes {
 			if name != "name" && name != "type" {
-				e.Attributes = append(e.Attributes, map[string]string{name: value})
+				e.Attributes[name] = value
 			}
 		}
 	}
