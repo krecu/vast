@@ -9,7 +9,6 @@ type Extension struct {
 	Name           string     `xml:"name,attr,omitempty"`
 	CustomTracking []Tracking `xml:"CustomTracking>Tracking,omitempty"`
 	Data           []byte     `xml:",innerxml"`
-	Attributes     map[string]string
 }
 
 // the extension type as a middleware in the encoding process.
@@ -34,16 +33,6 @@ func (e Extension) MarshalXML(enc *xml.Encoder, start xml.StartElement) error {
 		e2 = extensionNoCT{Type: e.Type, Name: e.Name, Data: e.Data}
 	}
 
-	// custom attributes
-	if len(e.Attributes) > 0 {
-		for name, value := range e.Attributes {
-			start.Attr = append(start.Attr, xml.Attr{
-				Name:  xml.Name{Space: "", Local: name},
-				Value: value,
-			})
-		}
-	}
-
 	return enc.EncodeElement(e2, start)
 }
 
@@ -63,15 +52,5 @@ func (e *Extension) UnmarshalXML(dec *xml.Decoder, start xml.StartElement) error
 	if len(e.CustomTracking) == 0 {
 		e.Data = e2.Data
 	}
-
-	// if extension have attribute
-	if len(start.Attr) {
-		for name, value := range e.Attributes {
-			if name != "name" && name != "type" {
-				e.Attributes = append(e.Attributes, map[string]string{name: value})
-			}
-		}
-	}
-
 	return nil
 }
