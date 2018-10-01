@@ -1,15 +1,17 @@
 package vast
 
-import "encoding/xml"
+import (
+	"encoding/xml"
+)
 
 // Extension represent arbitrary XML provided by the platform to extend the
 // VAST response or by custom trackers.
 type Extension struct {
-	Type           string     `xml:"type,attr,omitempty"`
-	Name           string     `xml:"name,attr,omitempty"`
-	CustomTracking []Tracking `xml:"CustomTracking>Tracking,omitempty"`
-	Data           []byte     `xml:",innerxml"`
-	Attributes     map[string]string
+	Type           string            `xml:"type,attr,omitempty"`
+	Name           string            `xml:"name,attr,omitempty"`
+	CustomTracking []Tracking        `xml:"CustomTracking>Tracking,omitempty"`
+	Data           []byte            `xml:",innerxml"`
+	Attributes     map[string]string `xml:"-"`
 }
 
 // the extension type as a middleware in the encoding process.
