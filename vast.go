@@ -1,25 +1,31 @@
 // Package vast implements IAB VAST 3.0 specification http://www.iab.net/media/file/VASTv3.0.pdf
 package vast
 
-import "encoding/xml"
+import (
+	"encoding/xml"
+	"errors"
+	"fmt"
+	"strings"
+)
 
 const (
-	TRACK_IMPRESSION = "impression"
-	TRACK_CLICK = "click"
-	TRACK_START = "start"
+	TRACK_IMPRESSION     = "impression"
+	TRACK_CLICK          = "click"
+	TRACK_START          = "start"
 	TRACK_FIRST_QUARTILE = "firstQuartile"
-	TRACK_MIDPOINT = "midpoint"
+	TRACK_MIDPOINT       = "midpoint"
 	TRACK_THIRD_QUARTILE = "thirdQuartile"
-	TRACK_COMPLETE = "complete"
-	TRACK_MUTE = "mute"
-	TRACK_UN_MUTE = "unmute"
-	TRACK_PAUSE = "pause"
-	TRACK_REWIND = "rewind"
-	TRACK_RESUME = "resume"
-	TRACK_FULL_SCREEN = "fullscreen"
-	TRACK_EXPAND = "expand"
-	TRACK_COLLAPSE = "collapse"
-	TRACK_CLOSE = "close"
+	TRACK_COMPLETE       = "complete"
+	TRACK_MUTE           = "mute"
+	TRACK_UN_MUTE        = "unmute"
+	TRACK_PAUSE          = "pause"
+	TRACK_REWIND         = "rewind"
+	TRACK_RESUME         = "resume"
+	TRACK_FULL_SCREEN    = "fullscreen"
+	TRACK_EXPAND         = "expand"
+	TRACK_COLLAPSE       = "collapse"
+	TRACK_CLOSE          = "close"
+	TRACK_VIEWABLE       = "viewable"
 )
 
 var (
@@ -29,6 +35,12 @@ var (
 		"mpg":  "video/mpeg",
 	}
 )
+
+type DisplayManage struct {
+	Name  string
+	Title string
+	Ver   string
+}
 
 // VAST is the root <VAST> tag
 type VAST struct {
@@ -43,6 +55,179 @@ type VAST struct {
 	// Contains a URI to a tracking resource that the video player should request
 	// upon receiving a “no ad” response
 	Errors []CDATAString `xml:"Error,omitempty"`
+	Secure bool
+}
+
+func (v *VAST) SetDisplayManager(info DisplayManage) {
+	if v.Ads[0].Wrapper != nil {
+		v.Ads[0].Wrapper.AdSystem = &AdSystem{
+			Name:    info.Name,
+			Version: info.Ver,
+		}
+	} else if v.Ads[0].InLine != nil {
+		v.Ads[0].InLine.AdSystem = &AdSystem{
+			Name:    info.Name,
+			Version: info.Ver,
+		}
+		v.Ads[0].InLine.Advertiser = info.Title
+	}
+}
+
+// add error link
+func (v *VAST) AddError(err ...CDATAString) {
+	v.Errors = append(v.Errors, err...)
+}
+
+// add new track
+func (v *VAST) AddTracking(tracking ...Tracking) {
+	if v.Ads[0].Wrapper != nil {
+	} else if v.Ads[0].InLine != nil {
+		for _, c := range v.Ads[0].InLine.Creatives {
+			if c.Linear != nil {
+				c.Linear.TrackingEvents = append(c.Linear.TrackingEvents, tracking...)
+			} else if c.NonLinearAds != nil {
+				c.NonLinearAds.TrackingEvents = append(c.NonLinearAds.TrackingEvents, tracking...)
+			}
+		}
+	}
+}
+
+// add new click
+func (v *VAST) AddClickTracking(tracking ...VideoClick) {
+	if v.Ads[0].Wrapper != nil {
+	} else if v.Ads[0].InLine != nil {
+		for _, c := range v.Ads[0].InLine.Creatives {
+			if c.Linear != nil {
+				c.Linear.VideoClicks.ClickTrackings = append(c.Linear.VideoClicks.ClickTrackings, tracking...)
+			}
+		}
+	}
+}
+
+// add new Impressions
+func (v *VAST) AddImpression(tracking ...Impression) {
+	if v.Ads[0].Wrapper != nil {
+		v.Ads[0].Wrapper.Impressions = append(v.Ads[0].InLine.Impressions, tracking...)
+	} else if v.Ads[0].InLine != nil {
+		v.Ads[0].InLine.Impressions = append(v.Ads[0].InLine.Impressions, tracking...)
+	}
+}
+
+// add new ViewableImpression
+func (v *VAST) AddViewable(tracking ...Viewable) {
+	if v.Ads[0].Wrapper != nil {
+		v.Ads[0].Wrapper.ViewableImpression = append(v.Ads[0].InLine.ViewableImpression, tracking...)
+	} else if v.Ads[0].InLine != nil {
+		v.Ads[0].InLine.ViewableImpression = append(v.Ads[0].InLine.ViewableImpression, tracking...)
+	}
+}
+
+// clear Extension
+func (v *VAST) ClearExtention() {
+	if v.Ads[0].Wrapper != nil {
+		v.Ads[0].Wrapper.Extensions = nil
+	} else if v.Ads[0].InLine != nil {
+		v.Ads[0].InLine.Extensions = nil
+	}
+}
+
+// add new Extension
+func (v *VAST) AddExtention(ext ...Extension) {
+	if v.Ads[0].Wrapper != nil {
+		v.Ads[0].Wrapper.Extensions = append(v.Ads[0].Wrapper.Extensions, ext...)
+	} else if v.Ads[0].InLine != nil {
+		v.Ads[0].InLine.Extensions = append(v.Ads[0].InLine.Extensions, ext...)
+	}
+}
+
+// set SetClickThrough
+func (v *VAST) SetClickThrough(tracking VideoClick) {
+	if v.Ads[0].InLine != nil {
+		for _, c := range v.Ads[0].InLine.Creatives {
+			if c.Linear != nil {
+				c.Linear.VideoClicks.ClickThroughs = []VideoClick{tracking}
+			}
+		}
+	}
+}
+
+func (v *VAST) SetSecure(secure bool) {
+
+	for i, imp := range v.Errors {
+		v.Errors[i].CDATA = secureUrl(imp.CDATA, secure)
+	}
+
+	for _, ad := range v.Ads {
+		ad.SetSecure(secure)
+	}
+}
+
+func (ad *Ad) SetSecure(secure bool) {
+	if ad.Wrapper != nil {
+		//ad.Wrapper.SetSecure(secure)
+	} else if ad.InLine != nil {
+		ad.InLine.SetSecure(secure)
+	}
+}
+
+// validate InLine
+func (inline *InLine) SetSecure(secure bool) {
+	for _, c := range inline.Creatives {
+		c.SetSecure(secure)
+	}
+	for i, imp := range inline.ViewableImpression {
+		inline.ViewableImpression[i].URI = secureUrl(imp.URI, secure)
+	}
+	for i, imp := range inline.Impressions {
+		inline.Impressions[i].URI = secureUrl(imp.URI, secure)
+	}
+	for i, imp := range inline.Errors {
+		inline.Errors[i].CDATA = secureUrl(imp.CDATA, secure)
+	}
+}
+
+// validate InLine
+func (creative *Creative) SetSecure(secure bool) {
+
+	if creative.Linear != nil {
+		for i, t := range creative.Linear.TrackingEvents {
+			creative.Linear.TrackingEvents[i].URI = secureUrl(t.URI, secure)
+		}
+
+		if creative.Linear.VideoClicks != nil {
+			for i, t := range creative.Linear.VideoClicks.ClickTrackings {
+				creative.Linear.VideoClicks.ClickTrackings[i].URI = secureUrl(t.URI, secure)
+			}
+
+			for i, t := range creative.Linear.VideoClicks.ClickThroughs {
+				creative.Linear.VideoClicks.ClickThroughs[i].URI = secureUrl(t.URI, secure)
+			}
+		}
+
+		for i, t := range creative.Linear.MediaFiles {
+			creative.Linear.MediaFiles[i].URI = secureUrl(t.URI, secure)
+		}
+	} else if creative.NonLinearAds != nil {
+		for i, t := range creative.NonLinearAds.TrackingEvents {
+			creative.NonLinearAds.TrackingEvents[i].URI = secureUrl(t.URI, secure)
+		}
+	}
+}
+
+// validate vast
+func (v *VAST) Validate() error {
+	if len(v.Ads) == 0 {
+		return errors.New("empty ads")
+	}
+
+	for i, ad := range v.Ads {
+		err := ad.Validate()
+		if err != nil {
+			return fmt.Errorf("bad ad[%d] %s", i, err)
+		}
+	}
+
+	return nil
 }
 
 // Ad represent an <Ad> child tag in a VAST document
@@ -57,6 +242,18 @@ type Ad struct {
 	Sequence int      `xml:"sequence,attr,omitempty"`
 	InLine   *InLine  `xml:",omitempty"`
 	Wrapper  *Wrapper `xml:",omitempty"`
+}
+
+// validate AD
+func (ad *Ad) Validate() error {
+
+	if ad.Wrapper != nil {
+		return ad.Wrapper.Validate()
+	} else if ad.InLine != nil {
+		return ad.InLine.Validate()
+	} else {
+		return errors.New("empty inline and wrapper")
+	}
 }
 
 // CDATAString ...
@@ -77,6 +274,8 @@ type InLine struct {
 	// One or more URIs that directs the video player to a tracking resource file that the
 	// video player should request when the first frame of the ad is displayed
 	Impressions []Impression `xml:"Impression"`
+	// MRC
+	ViewableImpression []Viewable `xml:"ViewableImpression>Viewable"`
 	// The container for one or more <Creative> elements
 	Creatives []Creative `xml:"Creatives>Creative"`
 	// A string value that provides a longer description of the ad.
@@ -108,9 +307,63 @@ type InLine struct {
 	Extensions []Extension `xml:"Extensions>Extension,omitempty"`
 }
 
+// validate InLine
+func (inline *InLine) Validate() error {
+	if len(inline.Creatives) == 0 {
+		return errors.New("empty creative")
+	} else {
+		for i, c := range inline.Creatives {
+			err := c.Validate()
+			if err != nil {
+				return fmt.Errorf("bad creative[%d] %s", i, err)
+			}
+		}
+	}
+
+	// filter impresion
+	filterImp := inline.Impressions[:0]
+	for _, imp := range inline.Impressions {
+		if imp.URI != "" {
+			imp.URI = strings.TrimSpace(imp.URI)
+			filterImp = append(filterImp, imp)
+		} else {
+			imp.URI = strings.TrimSpace(imp.URI)
+		}
+	}
+	inline.Impressions = filterImp
+
+	// filter Errors
+	filterErr := inline.Errors[:0]
+	for _, imp := range inline.Errors {
+		if imp.CDATA != "" {
+			filterErr = append(filterErr, imp)
+		}
+	}
+	inline.Errors = filterErr
+
+	// filter ViewableImpression
+	filterVImp := inline.ViewableImpression[:0]
+	for _, imp := range inline.ViewableImpression {
+		if imp.URI != "" {
+			imp.URI = strings.TrimSpace(imp.URI)
+			filterVImp = append(filterVImp, imp)
+		}
+	}
+	inline.ViewableImpression = filterVImp
+
+	return nil
+}
+
 // Impression is a URI that directs the video player to a tracking resource file that
 // the video player should request when the first frame of the ad is displayed
 type Impression struct {
+	ID  string `xml:"id,attr,omitempty"`
+	URI string `xml:",cdata"`
+}
+
+// Viewable Impression is a URI that directs the video player to a tracking resource file that
+// the video player should request when the first frame of the ad is displayed
+type Viewable struct {
 	ID  string `xml:"id,attr,omitempty"`
 	URI string `xml:",cdata"`
 }
@@ -145,6 +398,8 @@ type Wrapper struct {
 	// One or more URIs that directs the video player to a tracking resource file that the
 	// video player should request when the first frame of the ad is displayed
 	Impressions []Impression `xml:"Impression"`
+	// MRC
+	ViewableImpression []Viewable `xml:"ViewableImpression>Viewable"`
 	// A URI representing an error-tracking pixel; this element can occur multiple
 	// times.
 	Errors []CDATAString `xml:"Error,omitempty"`
@@ -159,6 +414,30 @@ type Wrapper struct {
 	FallbackOnNoAd           *bool `xml:"fallbackOnNoAd,attr,omitempty"`
 	AllowMultipleAds         *bool `xml:"allowMultipleAds,attr,omitempty"`
 	FollowAdditionalWrappers *bool `xml:"followAdditionalWrappers,attr,omitempty"`
+}
+
+// validate InLine
+func (wrap *Wrapper) Validate() error {
+
+	// filter impresion
+	filterImp := wrap.Impressions[:0]
+	for _, imp := range wrap.Impressions {
+		if imp.URI != "" {
+			filterImp = append(filterImp, imp)
+		}
+	}
+	wrap.Impressions = filterImp
+
+	// filter impresion
+	filterVImp := wrap.ViewableImpression[:0]
+	for _, imp := range wrap.ViewableImpression {
+		if imp.URI != "" {
+			filterVImp = append(filterVImp, imp)
+		}
+	}
+	wrap.ViewableImpression = filterVImp
+
+	return nil
 }
 
 // AdSystem contains information about the system that returned the ad
@@ -194,7 +473,18 @@ type Creative struct {
 	// of VAST.
 	// The nested <CreativeExtension> includes an attribute for type, which
 	// specifies the MIME type needed to execute the extension.
-	CreativeExtensions []Extension `xml:"CreativeExtensions>CreativeExtension,omitempty"`
+	// CreativeExtensions []Extension `xml:"CreativeExtensions>CreativeExtension,omitempty"`
+}
+
+// validate Creative
+func (creative *Creative) Validate() error {
+	if creative.Linear != nil {
+		return creative.Linear.Validate()
+	} else if creative.NonLinearAds != nil {
+		return creative.NonLinearAds.Validate()
+	} else {
+		return errors.New("empty linear/nonlinear")
+	}
 }
 
 // CompanionAds contains companions creatives
@@ -211,6 +501,12 @@ type NonLinearAds struct {
 	TrackingEvents []Tracking `xml:"TrackingEvents>Tracking,omitempty"`
 	// Non linear creatives
 	NonLinears []NonLinear `xml:"NonLinear,omitempty"`
+}
+
+// validate NonLinearAds
+// @todo - need implement
+func (nonlinear *NonLinearAds) Validate() error {
+	return nil
 }
 
 // CreativeWrapper defines wrapped creative's parent trackers
@@ -268,6 +564,49 @@ type Linear struct {
 	TrackingEvents []Tracking   `xml:"TrackingEvents>Tracking,omitempty"`
 	VideoClicks    *VideoClicks `xml:",omitempty"`
 	MediaFiles     []MediaFile  `xml:"MediaFiles>MediaFile,omitempty"`
+}
+
+// validate InLine
+func (linear *Linear) Validate() error {
+	if len(linear.MediaFiles) == 0 {
+		return errors.New("empty media")
+	} else {
+
+		// validate media
+		for i, m := range linear.MediaFiles {
+			err := m.Validate()
+			if err != nil {
+				return fmt.Errorf("bad media[%d] %s", i, err)
+			}
+		}
+	}
+
+	// filter empty track
+	filterTracking := linear.TrackingEvents[:0]
+	for _, t := range linear.TrackingEvents {
+		if t.URI != "" {
+			filterTracking = append(filterTracking, t)
+		}
+	}
+	linear.TrackingEvents = filterTracking
+
+	// validate track
+	for i, t := range linear.TrackingEvents {
+		err := t.Validate()
+		if err != nil {
+			return fmt.Errorf("bad track[%d] %s", i, err)
+		}
+	}
+
+	// validate VideoClick
+	if linear.VideoClicks != nil {
+		err := linear.VideoClicks.Validate()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // LinearWrapper defines a wrapped linear creative
@@ -471,6 +810,14 @@ type Tracking struct {
 	URI    string  `xml:",cdata"`
 }
 
+// validate Tracking
+func (track *Tracking) Validate() error {
+	if track.Event == "" {
+		return errors.New("empty event")
+	}
+	return nil
+}
+
 // StaticResource is the URL to a static file, such as an image or SWF file
 type StaticResource struct {
 	// Mime type of static resource
@@ -498,6 +845,51 @@ type VideoClicks struct {
 	ClickThroughs  []VideoClick `xml:"ClickThrough,omitempty"`
 	ClickTrackings []VideoClick `xml:"ClickTracking,omitempty"`
 	CustomClicks   []VideoClick `xml:"CustomClick,omitempty"`
+}
+
+// validate VideoClicks
+func (click *VideoClicks) Validate() error {
+
+	// filter empty ClickThroughs
+	filterClickThroughs := click.ClickThroughs[:0]
+	for _, c := range click.ClickThroughs {
+		if c.URI != "" {
+			filterClickThroughs = append(filterClickThroughs, c)
+		}
+	}
+	if len(filterClickThroughs) == 0 {
+		click.ClickThroughs = nil
+	} else {
+		click.ClickThroughs = filterClickThroughs
+	}
+
+	// filter empty ClickTrackings
+	filterClickTrackings := click.ClickTrackings[:0]
+	for _, c := range click.ClickTrackings {
+		if c.URI != "" {
+			filterClickTrackings = append(filterClickTrackings, c)
+		}
+	}
+	if len(filterClickTrackings) == 0 {
+		click.ClickTrackings = nil
+	} else {
+		click.ClickTrackings = filterClickTrackings
+	}
+
+	// filter empty CustomClicks
+	filterCustomClicks := click.CustomClicks[:0]
+	for _, c := range click.CustomClicks {
+		if c.URI != "" {
+			filterCustomClicks = append(filterCustomClicks, c)
+		}
+	}
+	if len(filterCustomClicks) == 0 {
+		click.CustomClicks = nil
+	} else {
+		click.CustomClicks = filterCustomClicks
+	}
+
+	return nil
 }
 
 // VideoClick defines a click URL for a linear creative
@@ -542,4 +934,40 @@ type MediaFile struct {
 	// placed in key/value pairs on the asset request).
 	APIFramework string `xml:"apiFramework,attr,omitempty"`
 	URI          string `xml:",cdata"`
+}
+
+// validate MediaFile
+func (media *MediaFile) Validate() error {
+	if media.URI == "" {
+		return errors.New("empty uri")
+	}
+	if media.Type == "" {
+		return errors.New("empty type")
+	}
+	if media.Width == 0 {
+		return errors.New("empty width")
+	}
+	if media.Height == 0 {
+		return errors.New("empty height")
+	}
+
+	return nil
+}
+
+func secureUrl(url string, secure bool) string {
+
+	url = strings.Replace(url, "http:", "", -1)
+	url = strings.Replace(url, "https:", "", -1)
+	url = strings.Replace(url, "//", "", -1)
+
+	if secure {
+		url = "https://" + url
+	} else {
+		url = "http://" + url
+	}
+
+	clear := strings.Replace(url, "\n", "", -1)
+	clear = strings.Replace(clear, "\t", "", -1)
+	clear = strings.Replace(clear, " ", "", -1)
+	return clear
 }
