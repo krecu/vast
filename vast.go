@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -55,7 +56,6 @@ type VAST struct {
 	// Contains a URI to a tracking resource that the video player should request
 	// upon receiving a “no ad” response
 	Errors []CDATAString `xml:"Error,omitempty"`
-	Secure bool
 }
 
 func (v *VAST) SetDisplayManager(info DisplayManage) {
@@ -132,11 +132,19 @@ func (v *VAST) ClearExtention() {
 }
 
 // add new Extension
-func (v *VAST) AddExtention(ext ...Extension) {
-	if v.Ads[0].Wrapper != nil {
-		v.Ads[0].Wrapper.Extensions = append(v.Ads[0].Wrapper.Extensions, ext...)
-	} else if v.Ads[0].InLine != nil {
-		v.Ads[0].InLine.Extensions = append(v.Ads[0].InLine.Extensions, ext...)
+func (v *VAST) AddExtention(exts ...Extension) {
+
+	for _, ext := range exts {
+
+		if ext.Type == "" || ext.Data == nil {
+			continue
+		}
+
+		if v.Ads[0].Wrapper != nil {
+			v.Ads[0].Wrapper.Extensions = append(v.Ads[0].Wrapper.Extensions, ext)
+		} else if v.Ads[0].InLine != nil {
+			v.Ads[0].InLine.Extensions = append(v.Ads[0].InLine.Extensions, ext)
+		}
 	}
 }
 
@@ -154,7 +162,7 @@ func (v *VAST) SetClickThrough(tracking VideoClick) {
 func (v *VAST) SetSecure(secure bool) {
 
 	for i, imp := range v.Errors {
-		v.Errors[i].CDATA = secureUrl(imp.CDATA, secure)
+		v.Errors[i].CDATA = SecureUrl(imp.CDATA, secure)
 	}
 
 	for _, ad := range v.Ads {
@@ -176,13 +184,13 @@ func (inline *InLine) SetSecure(secure bool) {
 		c.SetSecure(secure)
 	}
 	for i, imp := range inline.ViewableImpression {
-		inline.ViewableImpression[i].URI = secureUrl(imp.URI, secure)
+		inline.ViewableImpression[i].URI = SecureUrl(imp.URI, secure)
 	}
 	for i, imp := range inline.Impressions {
-		inline.Impressions[i].URI = secureUrl(imp.URI, secure)
+		inline.Impressions[i].URI = SecureUrl(imp.URI, secure)
 	}
 	for i, imp := range inline.Errors {
-		inline.Errors[i].CDATA = secureUrl(imp.CDATA, secure)
+		inline.Errors[i].CDATA = SecureUrl(imp.CDATA, secure)
 	}
 }
 
@@ -191,25 +199,25 @@ func (creative *Creative) SetSecure(secure bool) {
 
 	if creative.Linear != nil {
 		for i, t := range creative.Linear.TrackingEvents {
-			creative.Linear.TrackingEvents[i].URI = secureUrl(t.URI, secure)
+			creative.Linear.TrackingEvents[i].URI = SecureUrl(t.URI, secure)
 		}
 
 		if creative.Linear.VideoClicks != nil {
 			for i, t := range creative.Linear.VideoClicks.ClickTrackings {
-				creative.Linear.VideoClicks.ClickTrackings[i].URI = secureUrl(t.URI, secure)
+				creative.Linear.VideoClicks.ClickTrackings[i].URI = SecureUrl(t.URI, secure)
 			}
 
 			for i, t := range creative.Linear.VideoClicks.ClickThroughs {
-				creative.Linear.VideoClicks.ClickThroughs[i].URI = secureUrl(t.URI, secure)
+				creative.Linear.VideoClicks.ClickThroughs[i].URI = SecureUrl(t.URI, secure)
 			}
 		}
 
 		for i, t := range creative.Linear.MediaFiles {
-			creative.Linear.MediaFiles[i].URI = secureUrl(t.URI, secure)
+			creative.Linear.MediaFiles[i].URI = SecureUrl(t.URI, secure)
 		}
 	} else if creative.NonLinearAds != nil {
 		for i, t := range creative.NonLinearAds.TrackingEvents {
-			creative.NonLinearAds.TrackingEvents[i].URI = secureUrl(t.URI, secure)
+			creative.NonLinearAds.TrackingEvents[i].URI = SecureUrl(t.URI, secure)
 		}
 	}
 }
@@ -226,6 +234,77 @@ func (v *VAST) Validate() error {
 			return fmt.Errorf("bad ad[%d] %s", i, err)
 		}
 	}
+
+	return nil
+}
+
+// filter media by format
+func (v *VAST) FilterFormat(format []string) error {
+
+	if v.Ads[0].InLine == nil {
+		return errors.New("not inline")
+	}
+
+	media := v.Ads[0].InLine.Creatives[0].Linear.MediaFiles[:0]
+	for _, f := range format {
+		for _, m := range v.Ads[0].InLine.Creatives[0].Linear.MediaFiles {
+			if m.Type == f {
+				media = append(media, m)
+			}
+		}
+	}
+
+	if len(media) == 0 {
+		return errors.New("empty media by format")
+	}
+
+	v.Ads[0].InLine.Creatives[0].Linear.MediaFiles = media
+
+	return nil
+}
+
+// filter media by size
+func (v *VAST) FilterSize(w, h int) error {
+
+	if v.Ads[0].InLine == nil {
+		return errors.New("not inline")
+	}
+
+	media := v.Ads[0].InLine.Creatives[0].Linear.MediaFiles[:0]
+	for _, m := range v.Ads[0].InLine.Creatives[0].Linear.MediaFiles {
+		// фильтруем по вертикальному или горизонтальному видео
+
+		// горизонтальное
+		if w-h > 0 && m.Width-m.Height > 0 {
+			media = append(media, m)
+		}
+
+		// вертикальное
+		if w-h < 0 && m.Width-m.Height < 0 {
+			media = append(media, m)
+		}
+	}
+
+	if len(media) == 0 {
+		return errors.New("empty media by size")
+	}
+
+	var best = media[0]
+	for _, m := range media {
+		q1 := float64(m.Width * m.Height)
+		q2 := float64(best.Width * best.Height)
+		q := float64(w * h)
+		qr1 := math.Abs(q1*100/q - 100.0)
+		qr2 := math.Abs(q2*100/q - 100.0)
+
+		if qr1 < qr2 {
+			best = m
+		}
+	}
+
+	best.Width = w
+	best.Height = h
+	v.Ads[0].InLine.Creatives[0].Linear.MediaFiles = []MediaFile{best}
 
 	return nil
 }
@@ -954,7 +1033,7 @@ func (media *MediaFile) Validate() error {
 	return nil
 }
 
-func secureUrl(url string, secure bool) string {
+func SecureUrl(url string, secure bool) string {
 
 	url = strings.Replace(url, "http:", "", -1)
 	url = strings.Replace(url, "https:", "", -1)
@@ -969,5 +1048,23 @@ func secureUrl(url string, secure bool) string {
 	clear := strings.Replace(url, "\n", "", -1)
 	clear = strings.Replace(clear, "\t", "", -1)
 	clear = strings.Replace(clear, " ", "", -1)
+	return clear
+}
+
+// отчистка от муссора
+func ClearBuf(buf []byte) []byte {
+
+	clear := strings.Replace(string(buf), "\n", "", -1)
+	clear = strings.Replace(clear, "\t", "", -1)
+
+	return []byte(clear)
+}
+
+// отчистка от муссора
+func ClearStr(buf string) string {
+
+	clear := strings.Replace(buf, "\n", "", -1)
+	clear = strings.Replace(clear, "\t", "", -1)
+
 	return clear
 }
