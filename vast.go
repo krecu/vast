@@ -136,7 +136,7 @@ func (v *VAST) AddExtention(exts ...Extension) {
 
 	for _, ext := range exts {
 
-		if ext.Type == "" || ext.Data == nil {
+		if ext.Type == "" {
 			continue
 		}
 
