@@ -29,6 +29,26 @@ const (
 	TRACK_VIEWABLE       = "viewable"
 )
 
+var VNTracking = map[string]string{
+	TRACK_IMPRESSION:     "impression",
+	TRACK_CLICK:          "click",
+	TRACK_START:          "start",
+	TRACK_FIRST_QUARTILE: "q1",
+	TRACK_MIDPOINT:       "q2",
+	TRACK_THIRD_QUARTILE: "q3",
+	TRACK_COMPLETE:       "end",
+	TRACK_MUTE:           "mute",
+	TRACK_UN_MUTE:        "unmute",
+	TRACK_PAUSE:          "pause",
+	TRACK_REWIND:         "rewind",
+	TRACK_RESUME:         "resume",
+	TRACK_FULL_SCREEN:    "fullscreen",
+	TRACK_EXPAND:         "expand",
+	TRACK_COLLAPSE:       "collapse",
+	TRACK_CLOSE:          "close",
+	TRACK_VIEWABLE:       "viewable",
+}
+
 var (
 	MimeType = map[string]string{
 		"mp4":  "video/mp4",
