@@ -30,7 +30,6 @@ const (
 )
 
 var VNTracking = map[string]string{
-	TRACK_IMPRESSION:     "impression",
 	TRACK_CLICK:          "click",
 	TRACK_START:          "start",
 	TRACK_FIRST_QUARTILE: "q1",
@@ -46,7 +45,6 @@ var VNTracking = map[string]string{
 	TRACK_EXPAND:         "expand",
 	TRACK_COLLAPSE:       "collapse",
 	TRACK_CLOSE:          "close",
-	TRACK_VIEWABLE:       "viewable",
 }
 
 var (
