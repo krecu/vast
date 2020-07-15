@@ -99,6 +99,13 @@ func (v *VAST) AddError(err ...CDATAString) {
 // add new track
 func (v *VAST) AddTracking(tracking ...Tracking) {
 	if v.Ads[0].Wrapper != nil {
+		for _, c := range v.Ads[0].Wrapper.Creatives {
+			if c.Linear != nil {
+				c.Linear.TrackingEvents = append(c.Linear.TrackingEvents, tracking...)
+			} else if c.NonLinearAds != nil {
+				c.NonLinearAds.TrackingEvents = append(c.NonLinearAds.TrackingEvents, tracking...)
+			}
+		}
 	} else if v.Ads[0].InLine != nil {
 		for _, c := range v.Ads[0].InLine.Creatives {
 			if c.Linear != nil {
@@ -125,7 +132,7 @@ func (v *VAST) AddClickTracking(tracking ...VideoClick) {
 // add new Impressions
 func (v *VAST) AddImpression(tracking ...Impression) {
 	if v.Ads[0].Wrapper != nil {
-		v.Ads[0].Wrapper.Impressions = append(v.Ads[0].InLine.Impressions, tracking...)
+		v.Ads[0].Wrapper.Impressions = append(v.Ads[0].Wrapper.Impressions, tracking...)
 	} else if v.Ads[0].InLine != nil {
 		v.Ads[0].InLine.Impressions = append(v.Ads[0].InLine.Impressions, tracking...)
 	}
@@ -134,7 +141,7 @@ func (v *VAST) AddImpression(tracking ...Impression) {
 // add new ViewableImpression
 func (v *VAST) AddViewable(tracking ...Viewable) {
 	if v.Ads[0].Wrapper != nil {
-		v.Ads[0].Wrapper.ViewableImpression = append(v.Ads[0].InLine.ViewableImpression, tracking...)
+		v.Ads[0].Wrapper.ViewableImpression = append(v.Ads[0].Wrapper.ViewableImpression, tracking...)
 	} else if v.Ads[0].InLine != nil {
 		v.Ads[0].InLine.ViewableImpression = append(v.Ads[0].InLine.ViewableImpression, tracking...)
 	}
