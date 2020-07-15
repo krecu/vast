@@ -120,6 +120,11 @@ func (v *VAST) AddTracking(tracking ...Tracking) {
 // add new click
 func (v *VAST) AddClickTracking(tracking ...VideoClick) {
 	if v.Ads[0].Wrapper != nil {
+		for _, c := range v.Ads[0].Wrapper.Creatives {
+			if c.Linear != nil {
+				c.Linear.VideoClicks.ClickTrackings = append(c.Linear.VideoClicks.ClickTrackings, tracking...)
+			}
+		}
 	} else if v.Ads[0].InLine != nil {
 		for _, c := range v.Ads[0].InLine.Creatives {
 			if c.Linear != nil {
