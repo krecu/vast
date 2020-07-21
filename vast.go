@@ -1053,12 +1053,6 @@ func (media *MediaFile) Validate() error {
 	if media.Type == "" {
 		return errors.New("empty type")
 	}
-	if media.Width == 0 {
-		return errors.New("empty width")
-	}
-	if media.Height == 0 {
-		return errors.New("empty height")
-	}
 
 	return nil
 }
