@@ -6,7 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/url"
 	"strings"
+
+	"github.com/k0kubun/pp"
 )
 
 const (
@@ -202,9 +205,27 @@ func (v *VAST) SetSecure(secure bool) {
 
 func (ad *Ad) SetSecure(secure bool) {
 	if ad.Wrapper != nil {
-		//ad.Wrapper.SetSecure(secure)
+		ad.Wrapper.SetSecure(secure)
 	} else if ad.InLine != nil {
 		ad.InLine.SetSecure(secure)
+	}
+}
+
+func (wrap *Wrapper) SetSecure(secure bool) {
+
+	wrap.VASTAdTagURI.CDATA = SecureUrl(wrap.VASTAdTagURI.CDATA, secure)
+
+	for _, c := range wrap.Creatives {
+		c.SetSecure(secure)
+	}
+	for i, imp := range wrap.ViewableImpression {
+		wrap.ViewableImpression[i].URI = SecureUrl(imp.URI, secure)
+	}
+	for i, imp := range wrap.Impressions {
+		wrap.Impressions[i].URI = SecureUrl(imp.URI, secure)
+	}
+	for i, imp := range wrap.Errors {
+		wrap.Errors[i].CDATA = SecureUrl(imp.CDATA, secure)
 	}
 }
 
@@ -221,6 +242,30 @@ func (inline *InLine) SetSecure(secure bool) {
 	}
 	for i, imp := range inline.Errors {
 		inline.Errors[i].CDATA = SecureUrl(imp.CDATA, secure)
+	}
+}
+
+// validate InLine
+func (creative *CreativeWrapper) SetSecure(secure bool) {
+
+	if creative.Linear != nil {
+		for i, t := range creative.Linear.TrackingEvents {
+			creative.Linear.TrackingEvents[i].URI = SecureUrl(t.URI, secure)
+		}
+
+		if creative.Linear.VideoClicks != nil {
+			for i, t := range creative.Linear.VideoClicks.ClickTrackings {
+				creative.Linear.VideoClicks.ClickTrackings[i].URI = SecureUrl(t.URI, secure)
+			}
+
+			for i, t := range creative.Linear.VideoClicks.ClickThroughs {
+				creative.Linear.VideoClicks.ClickThroughs[i].URI = SecureUrl(t.URI, secure)
+			}
+		}
+	} else if creative.NonLinearAds != nil {
+		for i, t := range creative.NonLinearAds.TrackingEvents {
+			creative.NonLinearAds.TrackingEvents[i].URI = SecureUrl(t.URI, secure)
+		}
 	}
 }
 
@@ -1057,22 +1102,36 @@ func (media *MediaFile) Validate() error {
 	return nil
 }
 
-func SecureUrl(url string, secure bool) string {
+func SecureUrl(uri string, secure bool) string {
 
-	url = strings.Replace(url, "http:", "", -1)
-	url = strings.Replace(url, "https:", "", -1)
-	url = strings.Replace(url, "//", "", -1)
+	uriClear := strings.Replace(uri, "\n", "", -1)
+	uriClear = strings.Replace(uriClear, "\t", "", -1)
+	uriClear = strings.Replace(uriClear, " ", "", -1)
 
-	if secure {
-		url = "https://" + url
-	} else {
-		url = "http://" + url
+	uriRune := []rune(uriClear)
+
+	if string(uriRune[0:8]) == "https://" {
+		uriRune = uriRune[8:]
+	} else if string(uriRune[0:7]) == "http://" {
+		uriRune = uriRune[7:]
+	} else if string(uriRune[0:2]) == "//" {
+		uriRune = uriRune[2:]
+	} else if string(uriRune[0:3]) == "://" {
+		uriRune = uriRune[3:]
 	}
 
-	clear := strings.Replace(url, "\n", "", -1)
-	clear = strings.Replace(clear, "\t", "", -1)
-	clear = strings.Replace(clear, " ", "", -1)
-	return clear
+	uriUrl, err := url.Parse(string(uriRune))
+	if err != nil {
+		pp.Println(uri, err)
+	}
+
+	if secure {
+		uriUrl.Scheme = "https"
+	} else {
+		uriUrl.Scheme = "http"
+	}
+
+	return uriUrl.String()
 }
 
 // отчистка от муссора
