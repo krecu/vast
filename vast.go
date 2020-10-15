@@ -8,8 +8,6 @@ import (
 	"math"
 	"net/url"
 	"strings"
-
-	"github.com/k0kubun/pp"
 )
 
 const (
@@ -1122,7 +1120,7 @@ func SecureUrl(uri string, secure bool) string {
 
 	uriUrl, err := url.Parse(string(uriRune))
 	if err != nil {
-		pp.Println(uri, err)
+		return ""
 	}
 
 	if secure {
